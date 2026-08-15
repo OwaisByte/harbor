@@ -39,7 +39,7 @@ export function mergeSubtitleChoices(
   external: SubResult[],
   embedded: EmbeddedSubtitleTrack[],
 ): SubtitleChoice[] {
-  return [...external.map(externalChoice), ...embedded.map(embeddedChoice)];
+  return [...embedded.map(embeddedChoice), ...external.map(externalChoice)];
 }
 
 type SubtitleChoiceLoadResult = {

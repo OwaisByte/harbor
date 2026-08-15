@@ -51,12 +51,19 @@ test("external and embedded picker choices have collision-safe identities", asyn
   const { mergeSubtitleChoices } = await loadChoiceModule();
   const choices = mergeSubtitleChoices([external], [embedded]);
 
+  assert.deepEqual(choices.map((choice) => choice.key).sort(), [
+    "embedded:5:0",
+    "external:embedded:5:0",
+  ]);
+});
+
+test("embedded picker choices appear before provider results", async () => {
+  const { mergeSubtitleChoices } = await loadChoiceModule();
+  const choices = mergeSubtitleChoices([external], [embedded]);
+
   assert.deepEqual(
-    choices.map((choice) => [choice.kind, choice.key]),
-    [
-      ["external", "external:embedded:5:0"],
-      ["embedded", "embedded:5:0"],
-    ],
+    choices.map((choice) => choice.kind),
+    ["embedded", "external"],
   );
 });
 
@@ -87,7 +94,7 @@ test("embedded probing starts alongside provider search", async () => {
   assert.equal(result.embeddedError, false);
   assert.deepEqual(
     result.choices.map((choice) => choice.kind),
-    ["external", "embedded"],
+    ["embedded", "external"],
   );
 });
 
@@ -116,7 +123,7 @@ test("provider results become usable while embedded probing is still pending", a
   resolveEmbedded([embedded]);
   assert.deepEqual(
     (await pending).choices.map((choice: { kind: string }) => choice.kind),
-    ["external", "embedded"],
+    ["embedded", "external"],
   );
 });
 
