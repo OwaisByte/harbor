@@ -6,6 +6,10 @@ import { isLinuxDesktop, isMacDesktop, isWindowsDesktop } from "@/lib/platform";
 import { makeSafeTauriUnlisten } from "@/lib/tauri-unlisten";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
+  markMpvSubtitleFpsSessionRecreated,
+  resetMpvSubtitleFpsForTransition,
+} from "./mpv-properties";
+import {
   emptySnapshot,
   type PlayerBridge,
   type PlayerCapabilities,
@@ -88,6 +92,10 @@ const AUDIO_PROFILE_AF: Record<string, string> = {
 
 const DEFAULT_UA = "VLC/3.0.20 LibVLC/3.0.20";
 
+async function resetSubtitleFpsBeforeMpvTransition(): Promise<void> {
+  await resetMpvSubtitleFpsForTransition();
+}
+
 let appliedAudioDevice: string | null = null;
 
 async function applyAudioDevice(want: string): Promise<void> {
@@ -122,7 +130,9 @@ async function applyHeaderProps(headers?: Record<string, string>): Promise<void>
     else fields.push(`${k}: ${v}`);
   }
   await invoke("mpv_set_property", { name: "user-agent", value: ua }).catch(() => {});
-  await invoke("mpv_set_property", { name: "http-header-fields", value: fields.join(",") }).catch(() => {});
+  await invoke("mpv_set_property", { name: "http-header-fields", value: fields.join(",") }).catch(
+    () => {},
+  );
 }
 
 export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
@@ -147,6 +157,7 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
   let geomResizeObserver: ResizeObserver | null = null;
   let geomTauriUnlisten: Array<() => void> = [];
   let mpvStarted = false;
+  let mediaRevision = 0;
   let suppressEndFileUntil = 0;
   let svpFilterFailed = false;
   let secondarySid: string | null = null;
@@ -186,6 +197,7 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
     if (raw.event === "player-failure") {
       const reason = String((raw as { reason?: unknown }).reason ?? "");
       snap = mpvFailureSnapshot(snap, reason);
+      mediaRevision += 1;
       mpvStarted = false;
       invoke("mpv_stop").catch(() => {});
       emit();
@@ -210,11 +222,13 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
           const id = String(t.id ?? "");
           const lang = (t.lang ?? t.language) as string | undefined;
           const title = t.title as string | undefined;
-          const codecDesc = (t["codec-desc"] as string | undefined) || (t.codec as string | undefined);
+          const codecDesc =
+            (t["codec-desc"] as string | undefined) || (t.codec as string | undefined);
           const channels = t["demux-channels"] as string | undefined;
-          const channelCount = typeof t["demux-channel-count"] === "number"
-            ? (t["demux-channel-count"] as number)
-            : undefined;
+          const channelCount =
+            typeof t["demux-channel-count"] === "number"
+              ? (t["demux-channel-count"] as number)
+              : undefined;
           const external = t.external === true;
           const externalFilename = t["external-filename"] as string | undefined;
           const forced = t.forced === true;
@@ -341,6 +355,7 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
       host = null;
     },
     async load(src: PlayerSource) {
+      mediaRevision += 1;
       svpFilterFailed = false;
       snap.status = "loading";
       snap.errorCode = null;
@@ -359,6 +374,16 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
       pendingTracks = {};
       urlByExternalFilename.clear();
       emit();
+      try {
+        await resetSubtitleFpsBeforeMpvTransition();
+      } catch (error) {
+        console.warn(
+          "[mpv] could not reset subtitle FPS before loading media; recreating the mpv session",
+          error,
+        );
+        markMpvSubtitleFpsSessionRecreated();
+        mpvStarted = false;
+      }
       if (!unlistenEvent) {
         unlistenEvent = makeSafeTauriUnlisten(
           await listen<MpvEvent>("mpv://event", (ev) => handleEvent(ev.payload)),
@@ -376,7 +401,13 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
             await applyHeaderProps(src.headers);
             const startAt =
               typeof src.startAtSec === "number" && src.startAtSec > 0 ? src.startAtSec : 0;
-            const cmd: Array<string | number> = ["loadfile", src.url, "replace", 0, `start=${startAt}`];
+            const cmd: Array<string | number> = [
+              "loadfile",
+              src.url,
+              "replace",
+              0,
+              `start=${startAt}`,
+            ];
             await invoke("mpv_command", { cmd });
             for (const s of src.subtitles ?? []) {
               try {
@@ -429,7 +460,9 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
         });
         mpvStarted = true;
         if (opts.embed) {
-          await invoke("mpv_set_property", { name: "sub-visibility", value: false }).catch(() => {});
+          await invoke("mpv_set_property", { name: "sub-visibility", value: false }).catch(
+            () => {},
+          );
         }
         if (opts.embed && opts.getEmbedRect && geomKickHandler == null && !isLinuxDesktop()) {
           let lastRect: MpvRect | null = null;
@@ -524,26 +557,43 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
       invoke("mpv_set_property", { name: "aid", value: Number(id) || id }).catch(() => {});
     },
     setSubtitleTrack(id) {
-      if (id == null) {
-        invoke("mpv_set_property", { name: "sid", value: "no" }).catch(() => {});
-        snap.subText = "";
-        snap.subStartSec = 0;
-        emit();
-      } else {
-        invoke("mpv_set_property", { name: "sid", value: Number(id) || id }).catch(() => {});
-        snap.subText = "";
-        snap.subStartSec = 0;
-        emit();
-      }
+      const requestMediaRevision = mediaRevision;
+      snap.subText = "";
+      snap.subStartSec = 0;
+      emit();
+      void (async () => {
+        try {
+          await resetSubtitleFpsBeforeMpvTransition();
+          if (requestMediaRevision !== mediaRevision) return;
+          await invoke("mpv_set_property", {
+            name: "sid",
+            value: id == null ? "no" : Number(id) || id,
+          });
+        } catch (error) {
+          console.warn("[mpv] could not select a subtitle after resetting subtitle FPS", error);
+        }
+      })();
     },
     setSecondarySubtitleTrack(id) {
-      secondarySid = id;
+      const requestMediaRevision = mediaRevision;
       snap.secondarySubText = "";
       emit();
-      invoke("mpv_set_property", {
-        name: "secondary-sid",
-        value: id == null ? "no" : Number(id) || id,
-      }).catch(() => {});
+      void (async () => {
+        try {
+          await resetSubtitleFpsBeforeMpvTransition();
+          if (requestMediaRevision !== mediaRevision) return;
+          secondarySid = id;
+          await invoke("mpv_set_property", {
+            name: "secondary-sid",
+            value: id == null ? "no" : Number(id) || id,
+          });
+        } catch (error) {
+          console.warn(
+            "[mpv] could not select a secondary subtitle after resetting subtitle FPS",
+            error,
+          );
+        }
+      })();
     },
     setSubVisible(on) {
       invoke("mpv_set_property", { name: "sub-visibility", value: on }).catch(() => {});
@@ -572,7 +622,10 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
     },
     setAnime4kShaders(shaders) {
       const sep = isWindowsDesktop() ? ";" : ":";
-      const value = shaders.filter(Boolean).map((s) => s.replace(/\\/g, "/")).join(sep);
+      const value = shaders
+        .filter(Boolean)
+        .map((s) => s.replace(/\\/g, "/"))
+        .join(sep);
       invoke("mpv_set_property", { name: "glsl-shaders", value }).catch((e) =>
         console.warn("[shaders] glsl-shaders apply failed", e),
       );
@@ -585,6 +638,7 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
       }
     },
     async addSubtitle(url, lang, title, select, metadata): Promise<boolean> {
+      const requestMediaRevision = mediaRevision;
       let mpvUrl = url;
       if (/^https?:/i.test(url)) {
         try {
@@ -601,15 +655,20 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
           }
         }
       }
+      if (requestMediaRevision !== mediaRevision) return false;
       mpvUrl = mpvUrl.replace(/\\/g, "/");
-      urlByExternalFilename.set(mpvUrl, {
-        url,
-        release: metadata?.release,
-        provider: metadata?.provider,
-        matchScore: metadata?.matchScore,
-        subId: metadata?.subId,
-      });
       try {
+        if (select ?? true) {
+          await resetSubtitleFpsBeforeMpvTransition();
+        }
+        if (requestMediaRevision !== mediaRevision) return false;
+        urlByExternalFilename.set(mpvUrl, {
+          url,
+          release: metadata?.release,
+          provider: metadata?.provider,
+          matchScore: metadata?.matchScore,
+          subId: metadata?.subId,
+        });
         await invoke("mpv_sub_add", {
           url: mpvUrl,
           lang: lang ?? null,
@@ -689,8 +748,12 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
       }
     },
     setAbLoop(a, b) {
-      invoke("mpv_set_property", { name: "ab-loop-a", value: a == null ? "no" : a }).catch(() => {});
-      invoke("mpv_set_property", { name: "ab-loop-b", value: b == null ? "no" : b }).catch(() => {});
+      invoke("mpv_set_property", { name: "ab-loop-a", value: a == null ? "no" : a }).catch(
+        () => {},
+      );
+      invoke("mpv_set_property", { name: "ab-loop-b", value: b == null ? "no" : b }).catch(
+        () => {},
+      );
     },
     async requestPiP() {},
     async exitPiP() {},
@@ -718,6 +781,8 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
       };
     },
     destroy() {
+      mediaRevision += 1;
+      markMpvSubtitleFpsSessionRecreated();
       if (geomTimer != null) {
         window.clearInterval(geomTimer);
         geomTimer = null;

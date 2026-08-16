@@ -24,10 +24,18 @@ type Props = {
   track: TrackInfo | null;
   hasSecondary: boolean;
   autoSyncActive: boolean;
+  onBeforeApply?: () => void;
   onBack: () => void;
 };
 
-export function SubtitleFpsPanel({ engine, track, hasSecondary, autoSyncActive, onBack }: Props) {
+export function SubtitleFpsPanel({
+  engine,
+  track,
+  hasSecondary,
+  autoSyncActive,
+  onBeforeApply,
+  onBack,
+}: Props) {
   const tr = useT();
   const [videoFps, setVideoFps] = useState<number | null>(null);
   const [subtitleFps, setSubtitleFps] = useState<number | null>(null);
@@ -86,7 +94,8 @@ export function SubtitleFpsPanel({ engine, track, hasSecondary, autoSyncActive, 
     setSaving(true);
     setError(null);
     try {
-      await writeMpvSubtitleFps(choice, getMpvSubtitleFpsGeneration(), track.id);
+      onBeforeApply?.();
+      await writeMpvSubtitleFps(choice, getMpvSubtitleFpsGeneration());
       if (request !== applyRequestRef.current) return;
       const value = choice === "default" ? null : choice;
       setSubtitleFps(value);
@@ -136,7 +145,11 @@ export function SubtitleFpsPanel({ engine, track, hasSecondary, autoSyncActive, 
           <ArrowLeft size={15} strokeWidth={2.2} className="rtl:-scale-x-100" />
         </button>
         <p className="text-[13px] font-semibold text-ink">{tr("Subtitle FPS")}</p>
-        {saving && <Loader2 size={14} className="ms-auto animate-spin text-ink-muted" />}
+        {saving && (
+          <span role="status" aria-label={tr("Saving")} className="ms-auto text-ink-muted">
+            <Loader2 size={14} className="animate-spin motion-reduce:animate-none" />
+          </span>
+        )}
       </div>
 
       <div className="p-3">

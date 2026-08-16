@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { HoverTooltip } from "@/components/hover-tooltip";
@@ -6,6 +6,7 @@ import { useAutoSyncHandle } from "@/components/player/autosync/autosync-store";
 import { useT } from "@/lib/i18n";
 import type { TrackInfo } from "@/lib/player/bridge";
 import { readMpvSubtitleFps } from "@/lib/player/mpv-properties";
+import { createSubtitleFpsAvailabilityController } from "@/lib/player/subtitle-fps";
 import { SubtitleFpsIcon } from "./subtitle-fps-icon";
 import { SubtitleFpsPanel } from "./subtitle-fps-panel";
 
@@ -34,6 +35,20 @@ export function SubtitleFpsControl({
   const [supported, setSupported] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const supportControllerRef = useRef<ReturnType<
+    typeof createSubtitleFpsAvailabilityController
+  > | null>(null);
+  if (!supportControllerRef.current) {
+    supportControllerRef.current = createSubtitleFpsAvailabilityController({
+      read: async () => (await readMpvSubtitleFps()).supported,
+      commit: setSupported,
+    });
+  }
+
+  const refreshSupport = useCallback((hideWhileChecking = false) => {
+    if (hideWhileChecking) setSupported(false);
+    void supportControllerRef.current?.refresh();
+  }, []);
 
   const closeAndRestoreFocus = () => {
     setOpen(false);
@@ -42,19 +57,17 @@ export function SubtitleFpsControl({
 
   useEffect(() => {
     if (engine !== "mpv" || !isMainTauriWindow()) {
+      supportControllerRef.current?.invalidate();
       setSupported(false);
       setOpen(false);
       return;
     }
 
-    let cancelled = false;
-    void readMpvSubtitleFps().then((result) => {
-      if (!cancelled) setSupported(result.supported);
-    });
+    refreshSupport();
     return () => {
-      cancelled = true;
+      supportControllerRef.current?.invalidate();
     };
-  }, [engine, track?.id]);
+  }, [engine, refreshSupport, track?.id]);
 
   useEffect(() => {
     if (engine !== "mpv" || !isMainTauriWindow()) return;
@@ -63,14 +76,12 @@ export function SubtitleFpsControl({
     let unlisten: UnlistenFn | null = null;
     void listen<MpvPlaybackEvent>("mpv://event", ({ payload }) => {
       if (payload.event === "file-loaded") {
-        void readMpvSubtitleFps().then((result) => {
-          if (!disposed) setSupported(result.supported);
-        });
+        refreshSupport();
         return;
       }
       if (payload.event === "end-file" || payload.event === "shutdown") {
-        setSupported(false);
         setOpen(false);
+        refreshSupport(true);
       }
     })
       .then((dispose) => {
@@ -82,9 +93,10 @@ export function SubtitleFpsControl({
       );
     return () => {
       disposed = true;
+      supportControllerRef.current?.invalidate();
       unlisten?.();
     };
-  }, [engine]);
+  }, [engine, refreshSupport]);
 
   useEffect(() => {
     if (!open) return;
@@ -136,6 +148,7 @@ export function SubtitleFpsControl({
             engine={engine}
             hasSecondary={hasSecondary}
             autoSyncActive={autoSyncActive}
+            onBeforeApply={autoSync?.stop}
             onBack={closeAndRestoreFocus}
           />
         </div>

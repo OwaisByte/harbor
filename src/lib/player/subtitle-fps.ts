@@ -81,9 +81,82 @@ export function subtitleFpsAvailability(input: {
   return { enabled: true, reason: null };
 }
 
+export async function runAfterSubtitleFpsReset(
+  reset: () => Promise<void>,
+  action: () => void | Promise<void>,
+  onResetError: (error: unknown) => void,
+  isCurrent: () => boolean = () => true,
+): Promise<boolean> {
+  try {
+    await reset();
+  } catch (error) {
+    onResetError(error);
+    return false;
+  }
+  if (!isCurrent()) return false;
+  await action();
+  return isCurrent();
+}
+
+export function buildSubtitleTimingMediaKey(input: {
+  sourceUrl: string;
+  mediaId: string;
+  season?: number | null;
+  episode?: number | null;
+}): string {
+  return JSON.stringify([
+    input.sourceUrl,
+    input.mediaId,
+    input.season ?? null,
+    input.episode ?? null,
+  ]);
+}
+
+export function createSubtitleFpsRequestGuard() {
+  let revision = 0;
+  return {
+    begin: () => {
+      const requestRevision = ++revision;
+      return () => requestRevision === revision;
+    },
+    invalidate: () => {
+      revision += 1;
+    },
+  };
+}
+
+export function createSubtitleFpsAvailabilityController(deps: {
+  read: () => Promise<boolean>;
+  commit: (supported: boolean) => void;
+}) {
+  const guard = createSubtitleFpsRequestGuard();
+  return {
+    refresh: async (): Promise<boolean> => {
+      const isCurrent = guard.begin();
+      const supported = await deps.read();
+      if (!isCurrent()) return false;
+      deps.commit(supported);
+      return true;
+    },
+    invalidate: guard.invalidate,
+  };
+}
+
+export function isAutoSyncScopeCurrent(
+  scope: { mediaKey: string; trackId: string } | null,
+  current: { mediaKey: string; trackId: string | null; syncedTrack: boolean },
+): boolean {
+  return (
+    scope != null &&
+    scope.mediaKey === current.mediaKey &&
+    (scope.trackId === current.trackId || current.syncedTrack)
+  );
+}
+
 export function createSubtitleFpsCoordinator(deps: { writeFps: (value: number) => Promise<void> }) {
   let tail: Promise<void> = Promise.resolve();
   let active = false;
+  let sessionRevision = 0;
 
   const enqueue = <T>(operation: () => Promise<T>): Promise<T> => {
     const result = tail.then(operation);
@@ -106,11 +179,17 @@ export function createSubtitleFpsCoordinator(deps: { writeFps: (value: number) =
   };
 
   return {
-    apply: (choice: SubtitleFpsChoice, isCurrent: () => boolean = () => true) =>
-      enqueue(async () => {
-        if (!isCurrent()) throw new Error("Subtitle FPS context changed.");
+    apply: (choice: SubtitleFpsChoice, isCurrent: () => boolean = () => true) => {
+      const requestSession = sessionRevision;
+      return enqueue(async () => {
+        if (requestSession !== sessionRevision || !isCurrent()) {
+          throw new Error("Subtitle FPS context changed.");
+        }
         const value = subtitleFpsToMpvValue(choice);
         await deps.writeFps(value);
+        if (requestSession !== sessionRevision) {
+          throw new Error("Subtitle FPS context changed.");
+        }
         active = value !== 0;
         if (isCurrent()) return;
 
@@ -123,10 +202,12 @@ export function createSubtitleFpsCoordinator(deps: { writeFps: (value: number) =
           }
         }
         throw new Error("Subtitle FPS context changed.");
-      }),
+      });
+    },
     resetForTransition: (onResetError?: (error: unknown) => void) =>
       enqueue(() => resetActive(onResetError)),
     markSessionRecreated: () => {
+      sessionRevision += 1;
       active = false;
     },
     whenSettled: () => tail,

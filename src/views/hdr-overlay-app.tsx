@@ -5,6 +5,7 @@ import { ShellLayer } from "./player/shell-layer";
 import { DragClickStage } from "./player/drag-click-stage";
 import { emptySnapshot, type PlayerSnapshot } from "@/lib/player/bridge";
 import { createForwardingMpvBridge } from "@/lib/player/mpv-forward";
+import { buildSubtitleTimingMediaKey } from "@/lib/player/subtitle-fps";
 import { hdrOverlayEmitAction, onHdrStageProps } from "@/lib/hdr-overlay";
 import type { PlayerSrc } from "@/lib/view";
 
@@ -76,7 +77,15 @@ function HdrOverlayChrome() {
       gotPayloadRef.current = true;
       setPayload(p);
       snapRef.current = p.snap;
-      bridge.pushSnapshot(p.snap);
+      bridge.pushSnapshot(
+        p.snap,
+        buildSubtitleTimingMediaKey({
+          sourceUrl: p.src.url,
+          mediaId: p.src.meta.id,
+          season: p.src.episode?.season,
+          episode: p.src.episode?.episode,
+        }),
+      );
     });
     void hdrOverlayEmitAction("hdr-stage://request", {});
     let tries = 0;
