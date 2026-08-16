@@ -1,0 +1,302 @@
+// @ts-expect-error Node test types are intentionally outside the browser-only tsconfig.
+import assert from "node:assert/strict";
+// @ts-expect-error Node test types are intentionally outside the browser-only tsconfig.
+import { readFileSync } from "node:fs";
+// @ts-expect-error Node test types are intentionally outside the browser-only tsconfig.
+import test from "node:test";
+import {
+  SUBTITLE_FPS_PRESETS,
+  createSubtitleFpsCoordinator,
+  formatSubtitleFps,
+  matchingSubtitleFpsPreset,
+  subtitleFpsAvailability,
+  subtitleFpsToMpvValue,
+  validateSubtitleFps,
+} from "../src/lib/player/subtitle-fps.ts";
+import { isTextSubTrack } from "../src/lib/player/sub-format.ts";
+
+const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+
+test("subtitle FPS presets preserve exact NTSC fractional rates", () => {
+  assert.deepEqual(
+    SUBTITLE_FPS_PRESETS.map((preset) => preset.label),
+    ["23.976", "24", "25", "29.97", "30", "50", "59.94", "60"],
+  );
+  assert.equal(SUBTITLE_FPS_PRESETS[0].value, 24_000 / 1_001);
+  assert.equal(SUBTITLE_FPS_PRESETS[3].value, 30_000 / 1_001);
+  assert.equal(SUBTITLE_FPS_PRESETS[6].value, 60_000 / 1_001);
+});
+
+test("custom FPS accepts only finite values from 1 through 240", () => {
+  assert.deepEqual(validateSubtitleFps("23.976"), { ok: true, value: 23.976 });
+  assert.deepEqual(validateSubtitleFps(1), { ok: true, value: 1 });
+  assert.deepEqual(validateSubtitleFps(240), { ok: true, value: 240 });
+
+  for (const value of ["", " ", 0, 0.999, 240.001, Number.NaN, Infinity, true]) {
+    assert.equal(validateSubtitleFps(value).ok, false, String(value));
+  }
+});
+
+test("No correction maps to mpv's zero sentinel", () => {
+  assert.equal(subtitleFpsToMpvValue("default"), 0);
+  assert.equal(subtitleFpsToMpvValue(25), 25);
+  assert.throws(() => subtitleFpsToMpvValue(0), RangeError);
+});
+
+test("preset matching and formatting keep user-facing rates stable", () => {
+  assert.equal(matchingSubtitleFpsPreset(24_000 / 1_001), "23.976");
+  assert.equal(matchingSubtitleFpsPreset(24.981469), null);
+  assert.equal(formatSubtitleFps(24_000 / 1_001, 6), "23.976");
+  assert.equal(formatSubtitleFps(24.981469, 6), "24.981469");
+  assert.equal(formatSubtitleFps(null), "-");
+});
+
+test("manual control is available only for a selected text track in the primary mpv player", () => {
+  const valid = {
+    engine: "mpv" as const,
+    hasTrack: true,
+    textBased: true,
+    hasSecondary: false,
+    videoFps: 24_000 / 1_001,
+    nativeSupported: true,
+    autoSyncActive: false,
+  };
+  assert.deepEqual(subtitleFpsAvailability(valid), { enabled: true, reason: null });
+
+  const cases = [
+    [{ hasTrack: false }, "no-track"],
+    [{ engine: "html5" as const }, "html5"],
+    [{ textBased: false }, "not-text-based"],
+    [{ hasSecondary: true }, "secondary-active"],
+    [{ videoFps: null }, "video-fps-unavailable"],
+    [{ nativeSupported: false }, "native-unavailable"],
+    [{ autoSyncActive: true }, "auto-sync-active"],
+  ] as const;
+  for (const [override, reason] of cases) {
+    assert.deepEqual(subtitleFpsAvailability({ ...valid, ...override }), {
+      enabled: false,
+      reason,
+    });
+  }
+});
+
+test("recognized text formats are eligible and image formats are not", () => {
+  const track = (codec: string, title?: string) => ({
+    id: "1",
+    label: codec,
+    kind: "subtitle" as const,
+    selected: true,
+    codec,
+    title,
+  });
+  for (const codec of ["SUBRIP", "SRT", "WEBVTT", "ASS", "SSA", "MOV_TEXT"]) {
+    assert.equal(isTextSubTrack(track(codec)), true, codec);
+  }
+  for (const codec of ["HDMV_PGS_SUBTITLE", "DVD_SUBTITLE", "VOBSUB", "DVB_SUBTITLE"]) {
+    assert.equal(isTextSubTrack(track(codec)), false, codec);
+  }
+  assert.equal(isTextSubTrack(track("unknown", "external.srt")), true);
+  assert.equal(isTextSubTrack(track("unknown")), false);
+});
+
+test("FPS writes are serialized and transitions reset only an active correction", async () => {
+  const calls: number[] = [];
+  const coordinator = createSubtitleFpsCoordinator({
+    writeFps: async (value) => {
+      calls.push(value);
+    },
+  });
+
+  await Promise.all([coordinator.apply(25), coordinator.resetForTransition()]);
+  assert.deepEqual(calls, [25, 0]);
+  assert.equal(coordinator.isActive(), false);
+
+  await coordinator.resetForTransition();
+  assert.deepEqual(calls, [25, 0]);
+});
+
+test("a stale queued write cannot leak into a newer video or subtitle track", async () => {
+  const calls: number[] = [];
+  let current = true;
+  const coordinator = createSubtitleFpsCoordinator({
+    writeFps: async (value) => {
+      calls.push(value);
+      if (value === 25) current = false;
+    },
+  });
+
+  await assert.rejects(
+    coordinator.apply(25, () => current),
+    /context changed/,
+  );
+  assert.deepEqual(calls, [25, 0]);
+  assert.equal(coordinator.isActive(), false);
+});
+
+test("the latest rapid choice wins on the same subtitle track", async () => {
+  const calls: number[] = [];
+  let releaseFirstWrite: (() => void) | null = null;
+  let markFirstWriteStarted: (() => void) | null = null;
+  const firstWriteStarted = new Promise<void>((resolve) => {
+    markFirstWriteStarted = resolve;
+  });
+  let currentRequest = 1;
+  const coordinator = createSubtitleFpsCoordinator({
+    writeFps: async (value) => {
+      calls.push(value);
+      if (value === 25) {
+        markFirstWriteStarted?.();
+        await new Promise<void>((resolve) => {
+          releaseFirstWrite = resolve;
+        });
+      }
+    },
+  });
+
+  const first = coordinator.apply(25, () => currentRequest === 1);
+  await firstWriteStarted;
+  currentRequest = 2;
+  const second = coordinator.apply(24, () => currentRequest === 2);
+  releaseFirstWrite?.();
+
+  await assert.rejects(first, /context changed/);
+  await second;
+  assert.deepEqual(calls, [25, 0, 24]);
+  assert.equal(coordinator.isActive(), true);
+});
+
+test("a failed active reset blocks its transition and remains retryable", async () => {
+  let failReset = true;
+  const calls: number[] = [];
+  const coordinator = createSubtitleFpsCoordinator({
+    writeFps: async (value) => {
+      calls.push(value);
+      if (value === 0 && failReset) throw new Error("reset failed");
+    },
+  });
+
+  await coordinator.apply(25);
+  await assert.rejects(coordinator.resetForTransition(), /reset failed/);
+  assert.equal(coordinator.isActive(), true);
+  assert.deepEqual(calls, [25, 0]);
+
+  failReset = false;
+  await coordinator.resetForTransition();
+  assert.deepEqual(calls, [25, 0, 0]);
+  assert.equal(coordinator.isActive(), false);
+});
+
+test("native reads can wait for an in-flight subtitle FPS transition", async () => {
+  let releaseReset: (() => void) | null = null;
+  let markResetStarted: (() => void) | null = null;
+  const resetStarted = new Promise<void>((resolve) => {
+    markResetStarted = resolve;
+  });
+  const coordinator = createSubtitleFpsCoordinator({
+    writeFps: async (value) => {
+      if (value !== 0) return;
+      markResetStarted?.();
+      await new Promise<void>((resolve) => {
+        releaseReset = resolve;
+      });
+    },
+  });
+
+  await coordinator.apply(25);
+  const reset = coordinator.resetForTransition();
+  await resetStarted;
+
+  let settled = false;
+  const wait = coordinator.whenSettled().then(() => {
+    settled = true;
+  });
+  await Promise.resolve();
+  assert.equal(settled, false);
+
+  releaseReset?.();
+  await reset;
+  await wait;
+  assert.equal(settled, true);
+});
+
+test("the feature reuses Playback Stats FPS properties and only writes mpv sub-fps", () => {
+  const stats = read("src/components/player/stats-overlay.tsx");
+  const properties = read("src/lib/player/mpv-properties.ts");
+  assert.match(stats, /"estimated-vf-fps"/);
+  assert.match(stats, /"container-fps"/);
+  assert.match(properties, /"estimated-vf-fps"/);
+  assert.match(properties, /"container-fps"/);
+  assert.match(properties, /readMpvBoolean\("idle-active"\)/);
+  assert.match(properties, /"sub-fps"/);
+  assert.doesNotMatch(properties, /sub-delay|ffprobe|ffmpeg|MediaInfo/i);
+});
+
+test("manual FPS scope contains no calibration or delay ownership", () => {
+  const logic = read("src/lib/player/subtitle-fps.ts");
+  const panel = read("src/components/player/subtitle-menu/subtitle-fps-panel.tsx");
+  assert.doesNotMatch(logic, /calibr|sub-delay|SubtitleTimingPoint/i);
+  assert.doesNotMatch(panel, /calibr|early point|late point|manual offset|sub-delay/i);
+});
+
+test("the FPS control stays in the active main mpv player and does no per-frame work", () => {
+  const header = read("src/components/player/subtitle-menu/menu-header.tsx");
+  const menuTypes = read("src/components/player/subtitle-menu/types.ts");
+  const controls = read("src/components/player/subtitle-menu/subtitle-fps-control.tsx");
+  const panel = read("src/components/player/subtitle-menu/subtitle-fps-panel.tsx");
+  const renderer = read("src/components/player/transport/control-renderer.tsx");
+  const stremioRenderer = read("src/components/player/transport/control-renderer-stremio.tsx");
+  assert.match(header, /<SyncControl[\s\S]*<SubtitleFpsControl/);
+  assert.match(menuTypes, /engine\?: "html5" \| "mpv"/);
+  assert.match(renderer, /<SubtitleMenu[\s\S]*engine=\{ctx\.engine\}/);
+  assert.match(stremioRenderer, /<SubtitleMenu[\s\S]*engine=\{ctx\.engine\}/);
+  assert.match(controls, /getCurrentWindow\(\)\.label === "main"/);
+  assert.match(controls, /engine !== "mpv"/);
+  assert.match(controls, /triggerRef\.current\?\.focus\(\)/);
+  assert.match(controls, /listen<MpvPlaybackEvent>\("mpv:\/\/event"/);
+  for (const event of ["file-loaded", "end-file", "shutdown"]) {
+    assert.match(controls, new RegExp(`"${event}"`), event);
+  }
+  assert.match(controls, /SubtitleFpsPanel/);
+  assert.match(controls, /Subtitle FPS/);
+  assert.doesNotMatch(panel, /engine: "mpv"/);
+  assert.doesNotMatch(`${controls}\n${panel}`, /requestAnimationFrame|requestVideoFrameCallback/);
+  assert.doesNotMatch(read("src/components/player/subtitle-menu/sync-control.tsx"), /SubtitleFps/);
+});
+
+test("the FPS trigger uses the dedicated vector subtitle timing icon", () => {
+  const controls = read("src/components/player/subtitle-menu/subtitle-fps-control.tsx");
+  const icon = read("src/components/player/subtitle-menu/subtitle-fps-icon.tsx");
+
+  assert.match(controls, /<SubtitleFpsIcon/);
+  assert.doesNotMatch(controls, /\bGauge\b/);
+  assert.match(icon, /<svg/);
+  assert.match(icon, /currentColor/);
+  assert.match(icon, /aria-hidden="true"/);
+});
+
+test("the panel refreshes after Auto Sync or secondary subtitles reset the native value", () => {
+  const panel = read("src/components/player/subtitle-menu/subtitle-fps-panel.tsx");
+  assert.match(panel, /\[autoSyncActive, hasSecondary, track\?\.id\]/);
+  assert.match(panel, /resetByPlayer[\s\S]*autoSyncActive[\s\S]*hasSecondary/);
+});
+
+test("mpv lifecycle and Auto Sync boundaries reset only subtitle FPS", () => {
+  const properties = read("src/lib/player/mpv-properties.ts");
+  const autoSyncStore = read("src/components/player/autosync/autosync-store.ts");
+  const bridge = read("src/lib/player/mpv.ts");
+  const autoSync = read("src/views/player/hooks/use-auto-sync.ts");
+
+  assert.match(properties, /listen<MpvEvent>\("mpv:\/\/event"/);
+  for (const boundary of ["track-list", "file-loaded", "end-file", "shutdown"]) {
+    assert.match(properties, new RegExp(`"${boundary}"`), boundary);
+  }
+  assert.match(properties, /contextTrackId != null \|\| coordinator\.isActive\(\)/);
+  assert.match(properties, /pendingRequest === request/);
+  assert.match(properties, /await coordinator\.whenSettled\(\)/);
+  assert.match(autoSyncStore, /resetMpvSubtitleFpsForTransition/);
+  for (const action of ["run", "retry", "applyOffer"]) {
+    assert.match(autoSyncStore, new RegExp(`${action}: afterSubtitleFpsReset`), action);
+  }
+  assert.doesNotMatch(bridge, /mpv-properties|SubtitleFps/);
+  assert.doesNotMatch(autoSync, /mpv-properties|SubtitleFps|readMpvSubtitleDelay/);
+});

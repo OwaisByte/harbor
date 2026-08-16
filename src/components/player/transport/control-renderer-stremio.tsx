@@ -420,6 +420,7 @@ export function RenderedStremioControl({
       if (ctx.isLiveChannel && ctx.snap.subtitleTracks.length === 0) return null;
       return (
         <SubtitleMenu
+          engine={ctx.engine}
           tracks={ctx.snap.subtitleTracks}
           selectedId={ctx.snap.subtitleTracks.find((t) => t.selected)?.id ?? null}
           delaySec={ctx.snap.subDelaySec}

@@ -402,6 +402,31 @@ const player: Record<string, string> = {
   "Next and Previous behavior": "Поведение кнопок «Следующее» и «Предыдущее»",
   "Next and Previous follow your queue": "«Следующее» и «Предыдущее» следуют вашей очереди",
   "Next and Previous follow this show": "«Следующее» и «Предыдущее» следуют этому шоу",
+  "Subtitle FPS": "Частота кадров субтитров",
+  "Subtitle source FPS": "Исходная частота кадров субтитров",
+  "Choose the frame rate the subtitle was authored for.":
+    "Выберите частоту кадров, для которой были созданы субтитры.",
+  "No correction (default)": "Без коррекции (по умолчанию)",
+  "Custom...": "Другая...",
+  "Custom subtitle FPS": "Другая частота кадров субтитров",
+  "Apply custom subtitle FPS": "Применить другую частоту кадров субтитров",
+  "Video FPS": "Частота кадров видео",
+  "No correction": "Без коррекции",
+  "Couldn't apply subtitle FPS. Try again.":
+    "Не удалось применить частоту кадров субтитров. Повторите попытку.",
+  "Enter an FPS from 1 to 240.": "Введите частоту кадров от 1 до 240.",
+  "Select a subtitle track first.": "Сначала выберите дорожку субтитров.",
+  "Subtitle FPS is only available with the libmpv player.":
+    "Настройка частоты кадров субтитров доступна только в проигрывателе libmpv.",
+  "Subtitle FPS conversion is only available for text-based subtitles.":
+    "Преобразование частоты кадров доступно только для текстовых субтитров.",
+  "Subtitle FPS is unavailable while a secondary subtitle is active.":
+    "Настройка частоты кадров недоступна, пока включены вторые субтитры.",
+  "Video FPS is unavailable.": "Частота кадров видео недоступна.",
+  "Subtitle FPS is unavailable in this libmpv runtime.":
+    "Настройка частоты кадров субтитров недоступна в этой версии libmpv.",
+  "Turn off Auto Sync before changing subtitle FPS.":
+    "Отключите автосинхронизацию перед изменением частоты кадров субтитров.",
 };
 
 export default player;

@@ -404,6 +404,31 @@ const player: Record<string, string> = {
   "Next and Previous behavior": "Comportamento de Próximo e Anterior",
   "Next and Previous follow your queue": "Próximo e Anterior seguem sua fila",
   "Next and Previous follow this show": "Próximo e Anterior seguem esta série",
+  "Subtitle FPS": "FPS da legenda",
+  "Subtitle source FPS": "FPS de origem da legenda",
+  "Choose the frame rate the subtitle was authored for.":
+    "Escolha a taxa de fotogramas para a qual a legenda foi criada.",
+  "No correction (default)": "Sem correção (predefinição)",
+  "Custom...": "Personalizado...",
+  "Custom subtitle FPS": "FPS personalizado da legenda",
+  "Apply custom subtitle FPS": "Aplicar FPS personalizado da legenda",
+  "Video FPS": "FPS do vídeo",
+  "No correction": "Sem correção",
+  "Couldn't apply subtitle FPS. Try again.":
+    "Não foi possível aplicar o FPS da legenda. Tente novamente.",
+  "Enter an FPS from 1 to 240.": "Introduza uma taxa de FPS entre 1 e 240.",
+  "Select a subtitle track first.": "Selecione primeiro uma faixa de legendas.",
+  "Subtitle FPS is only available with the libmpv player.":
+    "O FPS da legenda só está disponível com o leitor libmpv.",
+  "Subtitle FPS conversion is only available for text-based subtitles.":
+    "A conversão de FPS só está disponível para legendas de texto.",
+  "Subtitle FPS is unavailable while a secondary subtitle is active.":
+    "O FPS da legenda não está disponível enquanto houver uma legenda secundária ativa.",
+  "Video FPS is unavailable.": "O FPS do vídeo não está disponível.",
+  "Subtitle FPS is unavailable in this libmpv runtime.":
+    "O FPS da legenda não está disponível nesta versão do libmpv.",
+  "Turn off Auto Sync before changing subtitle FPS.":
+    "Desative a sincronização automática antes de alterar o FPS da legenda.",
 };
 
 export default player;

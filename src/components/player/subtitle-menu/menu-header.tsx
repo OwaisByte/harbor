@@ -3,11 +3,14 @@ import type { TrackInfo } from "@/lib/player/bridge";
 import { useT } from "@/lib/i18n";
 import { useAutoSyncHandle } from "@/components/player/autosync/autosync-store";
 import { HoverTooltip } from "@/components/hover-tooltip";
+import { SubtitleFpsControl } from "./subtitle-fps-control";
 import { SyncControl } from "./sync-control";
 
 type Props = {
+  engine: "html5" | "mpv";
   count: number;
   selectedTrack: TrackInfo | null;
+  hasSecondary: boolean;
   delaySec: number;
   delayNonZero: boolean;
   onOpenStyleBar?: () => void;
@@ -39,6 +42,11 @@ export function MenuHeader(p: Props) {
           delaySec={p.delaySec}
           delayNonZero={p.delayNonZero}
           onClose={p.onClose}
+        />
+        <SubtitleFpsControl
+          engine={p.engine}
+          track={p.selectedTrack}
+          hasSecondary={p.hasSecondary}
         />
 
         {p.onOpenStyleBar && (

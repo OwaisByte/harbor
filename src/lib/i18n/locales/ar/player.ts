@@ -433,6 +433,30 @@ const player: Record<string, string> = {
   "Next and Previous behavior": "سلوك زرّي التالي والسابق",
   "Next and Previous follow your queue": "التالي والسابق يتبعان قائمة انتظارك",
   "Next and Previous follow this show": "التالي والسابق يتبعان هذا المسلسل",
+  "Subtitle FPS": "معدل إطارات الترجمة",
+  "Subtitle source FPS": "معدل إطارات مصدر الترجمة",
+  "Choose the frame rate the subtitle was authored for.":
+    "اختر معدل الإطارات الذي أُنشئت الترجمة على أساسه.",
+  "No correction (default)": "بلا تصحيح (الافتراضي)",
+  "Custom...": "مخصص...",
+  "Custom subtitle FPS": "معدل إطارات مخصص للترجمة",
+  "Apply custom subtitle FPS": "تطبيق معدل الإطارات المخصص للترجمة",
+  "Video FPS": "معدل إطارات الفيديو",
+  "No correction": "بلا تصحيح",
+  "Couldn't apply subtitle FPS. Try again.": "تعذّر تطبيق معدل إطارات الترجمة. حاول مرة أخرى.",
+  "Enter an FPS from 1 to 240.": "أدخل معدل إطارات من 1 إلى 240.",
+  "Select a subtitle track first.": "اختر مسار ترجمة أولًا.",
+  "Subtitle FPS is only available with the libmpv player.":
+    "لا يتوفر تعديل معدل إطارات الترجمة إلا مع مشغل libmpv.",
+  "Subtitle FPS conversion is only available for text-based subtitles.":
+    "لا يتوفر تحويل معدل الإطارات إلا للترجمات النصية.",
+  "Subtitle FPS is unavailable while a secondary subtitle is active.":
+    "لا يتوفر تعديل معدل إطارات الترجمة أثناء تفعيل ترجمة ثانوية.",
+  "Video FPS is unavailable.": "معدل إطارات الفيديو غير متوفر.",
+  "Subtitle FPS is unavailable in this libmpv runtime.":
+    "معدل إطارات الترجمة غير متوفر في إصدار libmpv الحالي.",
+  "Turn off Auto Sync before changing subtitle FPS.":
+    "أوقف المزامنة التلقائية قبل تغيير معدل إطارات الترجمة.",
 };
 
 export default player;
