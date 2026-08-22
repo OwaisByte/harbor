@@ -1099,6 +1099,7 @@ const SETTINGS_OPTIONS: SettingsOption[] = [
   { label: "Seek step", section: "hotkeys", anchorTitle: "Behavior", keywords: ["arrow jump", "seek amount", "skip seconds", "back forward step", "10 seconds", "jump length"] },
   { label: "Global", section: "hotkeys", anchorTitle: "Global", keywords: ["global shortcuts", "app wide keys", "anywhere shortcuts", "keyboard"] },
   { label: "Focus search", section: "hotkeys", anchorTitle: "Global", keywords: ["search shortcut", "slash key", "jump to search", "find", "quick search"] },
+  { label: "Open settings", section: "hotkeys", anchorTitle: "Global", keywords: ["settings shortcut", "settings hotkey", "ctrl s", "preferences"] },
   { label: "Increase interface scale", section: "hotkeys", anchorTitle: "Global", keywords: ["zoom in", "bigger ui", "ctrl plus", "scale up", "enlarge"] },
   { label: "Decrease interface scale", section: "hotkeys", anchorTitle: "Global", keywords: ["zoom out", "smaller ui", "ctrl minus", "scale down", "shrink"] },
   { label: "Reset interface scale", section: "hotkeys", anchorTitle: "Global", keywords: ["reset zoom", "100 percent", "ctrl zero", "default scale"] },

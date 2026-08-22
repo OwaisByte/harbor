@@ -88,7 +88,10 @@ export function MultiviewView({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      data-harbor-multiview-active={active ? "true" : undefined}
+      className="flex h-full min-h-0 flex-col"
+    >
       <div className={`flex shrink-0 items-center gap-2 px-6 ${collapsed ? "py-1" : "pb-3 pt-1"}`}>
         {!collapsed && (
           <>

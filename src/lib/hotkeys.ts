@@ -47,7 +47,8 @@ export type HotkeyId =
   | "globalUiScaleUp"
   | "globalUiScaleDown"
   | "globalUiScaleReset"
-  | "globalSearchFocus";
+  | "globalSearchFocus"
+  | "globalSettingsOpen";
 
 export type HotkeyDef = {
   id: HotkeyId;
@@ -63,6 +64,7 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: "globalUiScaleUp", scope: "Global", group: "Interface", label: "Increase interface scale", description: "Make Harbor's interface larger.", defaultBinding: "ctrl+=" },
   { id: "globalUiScaleDown", scope: "Global", group: "Interface", label: "Decrease interface scale", description: "Make Harbor's interface smaller.", defaultBinding: "ctrl+-" },
   { id: "globalUiScaleReset", scope: "Global", group: "Interface", label: "Reset interface scale", description: "Restore Harbor's interface scale to 100%.", defaultBinding: "ctrl+0" },
+  { id: "globalSettingsOpen", scope: "Global", group: "Navigation", label: "Open settings", description: "Open Harbor's settings outside playback.", defaultBinding: "ctrl+s" },
 
   { id: "playerClose", scope: "Player", group: "Playback", label: "Close player", description: "Exit playback and return to the previous view.", defaultBinding: "Escape" },
   { id: "playerPlayPause", scope: "Player", group: "Playback", label: "Play / pause", description: "Toggle playback.", defaultBinding: "Space" },

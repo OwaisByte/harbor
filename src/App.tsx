@@ -105,7 +105,12 @@ import { MangaFavoritesProvider } from "@/lib/manga-favorites";
 import { LocalWatchlistProvider } from "@/lib/local-watchlist";
 import { useSettings } from "@/lib/settings";
 import { torrentEngineSetOptions } from "@/lib/torrent/local-engine";
-import { effectiveBinding, eventToBinding, shouldHandleGlobalKeyboardEvent } from "@/lib/hotkeys";
+import {
+  effectiveBinding,
+  eventToBinding,
+  findHotkeyMatch,
+  shouldHandleGlobalKeyboardEvent,
+} from "@/lib/hotkeys";
 import { ViewProvider, useView, type Frame, type MetaFilter, type View } from "@/lib/view";
 import { requestOpenProfile, requestEditProfile } from "@/lib/social/open-profile";
 import { openNotificationCenter } from "@/lib/social/notification-open";
@@ -677,6 +682,7 @@ function Shell({ onReady }: { onReady?: () => void }) {
     picker,
     player,
     setView,
+    openSettings,
     canGoBack,
     goBack,
     canGoForward,
@@ -883,6 +889,14 @@ function Shell({ onReady }: { onReady?: () => void }) {
       if (!shouldHandleGlobalKeyboardEvent(e)) return;
       const binding = eventToBinding(e);
       const overrides = settings.hotkeys ?? {};
+      const globalMatch = findHotkeyMatch(e, overrides, "Global");
+      if (
+        globalMatch &&
+        globalMatch !== "globalUiScaleUp" &&
+        globalMatch !== "globalUiScaleDown" &&
+        globalMatch !== "globalUiScaleReset"
+      )
+        return;
       const uiScaleUpCustom = "globalUiScaleUp" in overrides;
       const uiScaleDownCustom = "globalUiScaleDown" in overrides;
       const uiScaleResetCustom = "globalUiScaleReset" in overrides;
@@ -950,6 +964,25 @@ function Shell({ onReady }: { onReady?: () => void }) {
       unbindWheel();
     };
   }, [player, settings.hotkeys, update]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!shouldHandleGlobalKeyboardEvent(e)) return;
+      if (findHotkeyMatch(e, settings.hotkeys ?? {}, "Global") !== "globalSettingsOpen")
+        return;
+      e.preventDefault();
+      if (
+        player ||
+        document.querySelector('[data-harbor-multiview-active="true"]')
+      )
+        return;
+      e.stopPropagation();
+      if (e.repeat) return;
+      openSettings();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [openSettings, player, settings.hotkeys]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

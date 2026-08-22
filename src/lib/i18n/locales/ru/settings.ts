@@ -624,6 +624,7 @@ const settings: Record<string, string> = {
   "Press a key…": "Нажмите клавишу…",
   "Focus search": "Перейти к поиску",
   "Jump to the top-bar search from anywhere.": "Переход к поиску в верхней панели из любого места.",
+  "Open Harbor's settings outside playback.": "Открывайте настройки Harbor вне режима воспроизведения.",
   "Your face in Watch Together rooms, sessions, and chat. Sits on top of your Stremio account.": "Ваше лицо в комнатах Watch Together, сессиях и чате. Поверх вашего аккаунта Stremio.",
   "Use my AniList avatar as my Harbor avatar": "Использовать аватар AniList как аватар Harbor",
   "Use my Trakt avatar as my Harbor avatar": "Использовать аватар Trakt как аватар Harbor",

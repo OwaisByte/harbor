@@ -624,6 +624,7 @@ const settings: Record<string, string> = {
   "Press a key…": "Pressione uma tecla…",
   "Focus search": "Focar busca",
   "Jump to the top-bar search from anywhere.": "Vá para a busca da barra superior de qualquer lugar.",
+  "Open Harbor's settings outside playback.": "Abra as configurações do Harbor fora da reprodução.",
   "Your face in Watch Together rooms, sessions, and chat. Sits on top of your Stremio account.": "Seu rosto nas salas, sessões e chat do Assistir Juntos. Fica em cima da sua conta Stremio.",
   "Use my AniList avatar as my Harbor avatar": "Usar meu avatar do AniList como avatar do Harbor",
   "Use my Trakt avatar as my Harbor avatar": "Usar meu avatar do Trakt como avatar do Harbor",
