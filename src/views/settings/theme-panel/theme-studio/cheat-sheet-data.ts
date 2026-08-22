@@ -52,6 +52,7 @@ export const WINDOW_HARBOR: HarborApi[] = [
   { call: "window.harbor.openNotifications()", desc: "Open the real notification center panel. Wire this to your bell button so users never lose their notifications on your theme." },
   { call: "window.harbor.openAccountMenu(el?)", desc: "Open Harbor's real account dropdown (profiles, View my profile, Notifications, Manage profiles, sign in/out). Pass the clicked element and the menu anchors under it; omit it and the menu opens top-right." },
   { call: "window.harbor.viewMyProfile()", desc: "Open the signed-in user's own Harbor profile page." },
+  { call: "window.harbor.tryViewMyProfile()", desc: "Open the signed-in user's own Harbor profile immediately when its handle is loaded. Returns true when navigation starts and false otherwise." },
   { call: "window.harbor.unreadCount()", desc: "Returns the current unread notification count as a number." },
   { call: "window.harbor.onUnread(cb)", desc: "Subscribe to unread-count changes. cb receives the new number; returns an unsubscribe function. Prefer the data-harbor-unread attribute below if you just need a badge." },
 ];

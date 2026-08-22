@@ -987,6 +987,12 @@ function Shell({ onReady }: { onReady?: () => void }) {
 
   useEffect(() => {
     const w = window as unknown as { harbor?: Record<string, unknown> };
+    const tryViewMyProfile = () => {
+      const handle = currentAuthor()?.handle?.trim();
+      if (!handle) return false;
+      requestOpenProfile(handle);
+      return true;
+    };
     w.harbor = {
       ...(w.harbor ?? {}),
       navigate: (v: string) => setView(v as View),
@@ -995,13 +1001,11 @@ function Shell({ onReady }: { onReady?: () => void }) {
       openSettings: () => setView("settings"),
       openNotifications: () => openNotificationCenter(),
       openAccountMenu: (el?: unknown) => openAccountMenu(anchorFromElement(el)),
+      tryViewMyProfile,
       viewMyProfile: async () => {
-        let handle = currentAuthor()?.handle;
-        if (!handle) {
-          await fetchMe().catch(() => {});
-          handle = currentAuthor()?.handle;
-        }
-        if (handle) requestOpenProfile(handle);
+        if (tryViewMyProfile()) return;
+        await fetchMe().catch(() => {});
+        tryViewMyProfile();
       },
       unreadCount: () => getUnreadCount(),
       onUnread: (cb: (count: number) => void) =>

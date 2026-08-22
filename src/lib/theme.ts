@@ -996,7 +996,13 @@ const elegantFinJs = `(function () {
       return;
     }
     if (t.closest("#ef-profile")) {
-      setOpen(true);
+      var opened = false;
+      try {
+        if (w.harbor && typeof w.harbor.tryViewMyProfile === "function") {
+          opened = w.harbor.tryViewMyProfile() === true;
+        }
+      } catch (e) {}
+      setOpen(!opened);
       return;
     }
     if (t.closest("aside[data-harbor-sidebar] [data-harbor-nav]")) {
